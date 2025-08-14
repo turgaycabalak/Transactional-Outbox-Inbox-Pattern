@@ -15,6 +15,8 @@ import lombok.Setter;
 @NoArgsConstructor
 public class OrderCreatedEvent {
   private UUID idempotentId; // outboxId, for idempotency
+
+  // from payload
   private Long orderId;
   private int quantity;
   private String description;

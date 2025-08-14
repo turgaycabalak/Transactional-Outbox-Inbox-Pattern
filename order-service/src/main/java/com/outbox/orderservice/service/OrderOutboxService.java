@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.outbox.orderservice.config.RabbitConfig;
 import com.outbox.orderservice.entity.OrderEntity;
@@ -29,25 +30,25 @@ public class OrderOutboxService {
   private final ObjectMapper objectMapper;
 
   @Transactional
-  public OrderOutbox saveOrderOutbox(OrderEntity orderEntity, String eventType) {
+  public OrderOutbox createAndSaveOrderOutbox(OrderEntity orderEntity, String eventType) {
     try {
-      String payload = objectMapper.writeValueAsString(orderEntity);
+      JsonNode payload = objectMapper.valueToTree(orderEntity);
 
       OrderOutbox toSaveOrderOutbox = createOrderOutbox(eventType, payload);
 
       return orderOutboxRepository.save(toSaveOrderOutbox);
-    } catch (JsonProcessingException e) {
+    } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }
 
-  private OrderOutbox createOrderOutbox(String eventType, String payload) {
+  private OrderOutbox createOrderOutbox(String eventType, JsonNode payload) {
     return OrderOutbox.builder()
         .id(UUID.randomUUID())
         .payload(payload)
         .eventType(eventType)
         .occurredOn(LocalDateTime.now())
-        .processedDate(null) // will be set after sending to eventbus
+        .processedOn(null) // will be set after sending to eventbus
         .build();
   }
 
@@ -85,14 +86,19 @@ public class OrderOutboxService {
 
   private OrderCreatedEvent createOrderCreatedEvent(OrderOutbox outbox) {
     try {
-      // instead of using deserializing, you can access OrderEntity from the relational object(one-to-one) if you want
-      OrderEntity orderFromJson = objectMapper.readValue(outbox.getPayload(), OrderEntity.class);
+      JsonNode payload = outbox.getPayload();
+      //long orderId = payload.get("id").asLong();
+      //int quantity = payload.get("quantity").asInt();
+      //String description = payload.get("description").asText();
+      //LocalDateTime createdAt = LocalDateTime.parse(payload.get("createdAt").asText());
+
+      OrderEntity orderFromPayload = objectMapper.treeToValue(payload, OrderEntity.class);
 
       return OrderCreatedEvent.builder()
-          .orderId(orderFromJson.getId())
-          .idempotentId(outbox.getId())
-          .quantity(orderFromJson.getQuantity())
-          .description(orderFromJson.getDescription())
+          .idempotentId(outbox.getId()) // outboxId, for idempotency
+          .orderId(orderFromPayload.getId())
+          .quantity(orderFromPayload.getQuantity())
+          .description(orderFromPayload.getDescription())
           .build();
     } catch (JsonProcessingException e) {
       throw new RuntimeException(e);

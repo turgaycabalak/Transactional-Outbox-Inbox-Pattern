@@ -25,7 +25,7 @@ public class OrderService {
     OrderEntity savedOrderEntity = saveOrder(orderCreateRequest.getQuantity(), orderCreateRequest.getDescription());
     log.info("Order created: {}", savedOrderEntity.getId());
 
-    OrderOutbox savedOrderOutbox = orderOutboxService.saveOrderOutbox(savedOrderEntity, "OrderCreatedEvent");
+    OrderOutbox savedOrderOutbox = orderOutboxService.createAndSaveOrderOutbox(savedOrderEntity, "OrderCreatedEvent");
     log.info("Order Outbox created: {}", savedOrderOutbox.getId());
 
     return savedOrderEntity;

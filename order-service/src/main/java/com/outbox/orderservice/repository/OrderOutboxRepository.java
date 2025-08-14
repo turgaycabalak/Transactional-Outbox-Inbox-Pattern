@@ -16,13 +16,14 @@ public interface OrderOutboxRepository extends JpaRepository<OrderOutbox, UUID> 
 
   @Query("""
       SELECT box FROM OrderOutbox box
-      WHERE box.processedDate IS NULL
+      WHERE box.processedOn IS NULL
       ORDER BY box.occurredOn DESC
       """)
   List<OrderOutbox> findOutboxesNotProcessed();
 
   @Transactional
   @Modifying
-  @Query("UPDATE OrderOutbox o SET o.processedDate = :date WHERE o.id IN :ids")
+  @Query("UPDATE OrderOutbox o SET o.processedOn = :date WHERE o.id IN :ids")
   void updateProcessedDateBatch(@Param("ids") List<UUID> ids, @Param("date") LocalDateTime date);
+
 }
