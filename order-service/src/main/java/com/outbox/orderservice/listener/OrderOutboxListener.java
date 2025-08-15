@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 import jakarta.annotation.PostConstruct;
@@ -78,9 +79,7 @@ public class OrderOutboxListener {
       while (!Thread.currentThread().isInterrupted()) {
         PGNotification[] notifications = pgConn.getNotifications(1000);
         if (notifications != null) {
-          for (PGNotification notification : notifications) {
-            handleNotification(notification);
-          }
+          Arrays.stream(notifications).forEach(this::handleNotification);
         }
 
         // Connection canlı kalması için ping
@@ -97,20 +96,23 @@ public class OrderOutboxListener {
 
   private void recoverMissedMessages() {
     List<OrderOutbox> unprocessed = orderOutboxRepository.findOutboxesNotProcessed();
-    for (OrderOutbox orderOutbox : unprocessed) {
+
+    unprocessed.forEach(orderOutbox -> {
       try {
         OrderCreatedEvent event = createOrderCreatedEvent(orderOutbox);
+
         rabbitTemplate.convertAndSend(
             RabbitConfig.ORDER_EXCHANGE,
             RabbitConfig.ORDER_CREATED_ROUTING_KEY,
             event
         );
+
         orderOutboxRepository.updateProcessedDateBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
         log.info("Recovered and processed outbox: {}", orderOutbox.getId());
       } catch (Exception e) {
         log.error("Error recovering outbox {}", orderOutbox.getId(), e);
       }
-    }
+    });
   }
 
   private void handleNotification(PGNotification notification) {
@@ -124,9 +126,7 @@ public class OrderOutboxListener {
           event
       );
 
-      orderOutboxRepository.updateProcessedDateBatch(
-          List.of(orderOutbox.getId()), LocalDateTime.now()
-      );
+      orderOutboxRepository.updateProcessedDateBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
 
       log.info("Processed outbox: {}", orderOutbox.getId());
 
