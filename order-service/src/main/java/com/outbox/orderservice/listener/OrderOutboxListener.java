@@ -73,7 +73,7 @@ public class OrderOutboxListener {
 
       log.info("Listening for PostgreSQL NOTIFY on 'order_outbox_created_notify'");
 
-      // Bağlantı açıldıktan sonra kayıp mesajları işleme
+      // Handling lost messages after connection is opened
       recoverMissedMessages();
 
       while (!Thread.currentThread().isInterrupted()) {
@@ -82,7 +82,7 @@ public class OrderOutboxListener {
           Arrays.stream(notifications).forEach(this::handleNotification);
         }
 
-        // Connection canlı kalması için ping
+        // Ping to keep connection alive
         try (Statement ping = conn.createStatement()) {
           ping.execute("SELECT 1");
         }
@@ -90,7 +90,7 @@ public class OrderOutboxListener {
 
     } catch (SQLException e) {
       log.error("PostgreSQL connection lost: {}", e.getMessage());
-      throw e; // Spring Retry yeniden bağlanmayı tetikler
+      throw e; // Triggers Spring Retry
     }
   }
 
