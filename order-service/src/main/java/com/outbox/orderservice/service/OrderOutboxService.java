@@ -31,15 +31,10 @@ public class OrderOutboxService {
 
   @Transactional
   public OrderOutbox createAndSaveOrderOutbox(OrderEntity orderEntity, String eventType) {
-    try {
-      JsonNode payload = objectMapper.valueToTree(orderEntity);
+    JsonNode payload = objectMapper.valueToTree(orderEntity);
+    OrderOutbox toSaveOrderOutbox = createOrderOutbox(eventType, payload);
 
-      OrderOutbox toSaveOrderOutbox = createOrderOutbox(eventType, payload);
-
-      return orderOutboxRepository.save(toSaveOrderOutbox);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    return orderOutboxRepository.save(toSaveOrderOutbox);
   }
 
   private OrderOutbox createOrderOutbox(String eventType, JsonNode payload) {
