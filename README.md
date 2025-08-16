@@ -64,3 +64,43 @@ sequenceDiagram
     A->>DB2: INSERT into order_inbox (idempotent)
     DB2-->>A: NOTIFY order_inbox_created_notify
     A->>A: Insert 2 analytics records
+````
+
+## 🔁 Event Flow Diagram Detailed
+
+```mermaid
+sequenceDiagram
+    participant O as Order Service
+    participant DB1 as order_outbox (Postgres)
+    participant MQ as RabbitMQ
+    participant A as Analytics Service
+    participant DB2 as order_inbox (Analytics DB)
+    participant Scheduler as Order Outbox Scheduler
+
+    Note over O,DB1: Step 1: Create Order
+    O->>DB1: INSERT order + outbox row (same transaction)
+    DB1-->>O: Commit OK
+
+    Note over DB1,O: Notify mechanism triggers
+    DB1-->>O: NOTIFY order_outbox_created_notify
+
+    Note over O,MQ: Step 2: Publish Event
+    O->>MQ: Publish OrderCreatedEvent
+    alt MQ unavailable
+        Note over Scheduler: Scheduler retries unprocessed outbox rows
+        Scheduler->>MQ: Retry publish OrderCreatedEvent
+    end
+
+    Note over MQ,A: Step 3: Consume Event
+    MQ->>A: Event consumed
+    A->>DB2: INSERT into order_inbox (idempotent)
+    alt Duplicate ID
+        DB2--xA: Ignore
+    else New ID
+        DB2-->>A: Success
+        DB2-->>A: NOTIFY order_inbox_created_notify
+    end
+
+    Note over A: Step 4: Analytics Processing
+    A->>A: Insert 2 analytics records
+    A->>DB2: UPDATE order_inbox processed_date
