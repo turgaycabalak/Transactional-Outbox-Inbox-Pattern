@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @AllArgsConstructor
-public class OrderListener {
+public class OrderEventListener {
   private final OrderInboxService orderInboxService;
 
   @Transactional
@@ -41,8 +41,8 @@ public class OrderListener {
     OrderInbox orderInboxToSave = createOrderInbox(orderCreatedEvent);
     OrderInbox savedOrderInbox = orderInboxService.save(orderInboxToSave);
 
-    log.info("OrderCreatedEvent processed and saved to order_inbox. idempotentId: {}, orderId: {}",
-        orderCreatedEvent.getIdempotentId(), orderCreatedEvent.getOrderId());
+    log.info("OrderCreatedEvent processed and saved to order_inbox. id/idempotentId: {}, orderId: {}",
+        savedOrderInbox.getId(), savedOrderInbox.getOrderId());
   }
 
   private OrderInbox createOrderInbox(OrderCreatedEvent orderCreatedEvent) {
@@ -52,7 +52,7 @@ public class OrderListener {
         .quantity(orderCreatedEvent.getQuantity())
         .description(orderCreatedEvent.getDescription())
         .occurredOn(LocalDateTime.now())
-        .processedDate(null)
+        .processedOn(null)
         .build();
   }
 }

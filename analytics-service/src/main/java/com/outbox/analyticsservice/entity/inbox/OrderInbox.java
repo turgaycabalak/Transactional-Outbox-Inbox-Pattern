@@ -35,6 +35,6 @@ public class OrderInbox {
   @Column(name = "occurred_on", nullable = false)
   private LocalDateTime occurredOn;
 
-  @Column(name = "processed_date")
-  private LocalDateTime processedDate;
+  @Column(name = "processed_on")
+  private LocalDateTime processedOn;
 }

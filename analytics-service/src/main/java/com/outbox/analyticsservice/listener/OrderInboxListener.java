@@ -1,31 +1,30 @@
-package com.outbox.orderservice.listener;
+package com.outbox.analyticsservice.listener;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import jakarta.annotation.PostConstruct;
 
 import javax.sql.DataSource;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.outbox.orderservice.config.RabbitConfig;
-import com.outbox.orderservice.entity.outbox.OrderOutbox;
-import com.outbox.orderservice.event.OrderCreatedEvent;
-import com.outbox.orderservice.repository.OrderOutboxRepository;
+import com.outbox.analyticsservice.entity.OrderAnalyticsEntity;
+import com.outbox.analyticsservice.entity.inbox.OrderInbox;
+import com.outbox.analyticsservice.repository.OrderInboxRepository;
+import com.outbox.analyticsservice.service.OrderInboxService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.postgresql.PGConnection;
 import org.postgresql.PGNotification;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
@@ -33,13 +32,13 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OrderOutboxListener {
+public class OrderInboxListener {
   private final DataSource dataSource;
-  private final RabbitTemplate rabbitTemplate;
-  private final OrderOutboxRepository orderOutboxRepository;
+  private final OrderInboxRepository orderInboxRepository;
   private final ObjectMapper objectMapper = new ObjectMapper()
       .registerModule(new JavaTimeModule())
       .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+  private final OrderInboxService orderInboxService;
 
 
   @PostConstruct
@@ -72,10 +71,10 @@ public class OrderOutboxListener {
       PGConnection pgConn = conn.unwrap(PGConnection.class);
 
       try (Statement stmt = conn.createStatement()) {
-        stmt.execute("LISTEN order_outbox_created_notify");
+        stmt.execute("LISTEN order_inbox_created_notify");
       }
 
-      log.info("Listening for PostgreSQL NOTIFY on 'order_outbox_created_notify'");
+      log.info("Listening for PostgreSQL NOTIFY on 'order_inbox_created_notify'");
 
       // Handling lost messages after connection is opened
       recoverMissedMessages();
@@ -99,53 +98,34 @@ public class OrderOutboxListener {
   }
 
   private void recoverMissedMessages() {
-    List<OrderOutbox> unprocessed = orderOutboxRepository.findOutboxesNotProcessed();
+    List<OrderInbox> unprocessed = orderInboxRepository.findInboxesNotProcessed();
+    List<OrderAnalyticsEntity> analytics = orderInboxService.createAndSaveAnalytics(unprocessed);
 
-    unprocessed.forEach(orderOutbox -> {
-      try {
-        OrderCreatedEvent event = createOrderCreatedEvent(orderOutbox);
-
-        rabbitTemplate.convertAndSend(
-            RabbitConfig.ORDER_EXCHANGE,
-            RabbitConfig.ORDER_CREATED_ROUTING_KEY,
-            event
-        );
-
-        orderOutboxRepository.updateProcessedDateBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
-        log.info("Recovered and processed outbox: {}", orderOutbox.getId());
-      } catch (Exception e) {
-        log.error("Error recovering outbox {}", orderOutbox.getId(), e);
-      }
-    });
+    List<UUID> orderInboxIds = unprocessed.stream()
+        .map(OrderInbox::getId)
+        .toList();
+    log.info("Analytics processed for order inboxes: {}", orderInboxIds);
   }
 
   private void handleNotification(PGNotification notification) {
     try {
-      OrderOutbox orderOutbox = objectMapper.readValue(notification.getParameter(), OrderOutbox.class);
-      OrderCreatedEvent event = createOrderCreatedEvent(orderOutbox);
+      int pid = notification.getPID();
+      String name = notification.getName();
+      String parameter = notification.getParameter();
+      log.info("Notification PID: {} || name: {} || parameter: {}", pid, name, parameter);
 
-      rabbitTemplate.convertAndSend(
-          RabbitConfig.ORDER_EXCHANGE,
-          RabbitConfig.ORDER_CREATED_ROUTING_KEY,
-          event
-      );
+      // todo: burda map edemiyor
+      OrderInbox orderInbox = objectMapper.readValue(parameter, OrderInbox.class);
 
-      orderOutboxRepository.updateProcessedDateBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
 
-      log.info("Processed outbox: {}", orderOutbox.getId());
+      List<OrderAnalyticsEntity> analytics = orderInboxService.createAndSaveAnalytics(List.of(orderInbox));
+      List<Long> analyticsIds = analytics.stream()
+          .map(OrderAnalyticsEntity::getId)
+          .toList();
 
-    } catch (Exception e) {
+      log.info("Order analytics {} created for the Order Inbox: {}", analyticsIds, orderInbox.getId());
+    } catch (JsonProcessingException e) {
       log.error("Error processing notification: {}", notification.getParameter(), e);
     }
-  }
-
-  private OrderCreatedEvent createOrderCreatedEvent(OrderOutbox outbox) {
-    JsonNode payload = outbox.getPayload();
-    return OrderCreatedEvent.builder()
-        .idempotentId(outbox.getId())
-        .orderId(payload.get("id").asLong())
-        .quantity(payload.get("quantity").asInt())
-        .description(payload.get("description").asText())
-        .build();
   }
 }

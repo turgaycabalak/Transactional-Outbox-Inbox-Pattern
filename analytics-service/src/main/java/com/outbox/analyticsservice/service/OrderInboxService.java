@@ -1,5 +1,6 @@
 package com.outbox.analyticsservice.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -38,17 +39,28 @@ public class OrderInboxService {
     log.info("Manual pulling publisher started processing. Found {} unprocessed Order Inboxes.",
         inboxesNotProcessed.size());
 
+    List<OrderAnalyticsEntity> analytics = createAndSaveAnalytics(inboxesNotProcessed);
+    return inboxesNotProcessed.stream()
+        .map(OrderInbox::getId)
+        .toList();
+  }
+
+  @Transactional
+  public List<OrderAnalyticsEntity> createAndSaveAnalytics(List<OrderInbox> inboxesNotProcessed) {
     List<OrderAnalyticsEntity> orderAnalyticsToSaveAll = inboxesNotProcessed.stream()
         .flatMap(inbox -> Stream.of(
             createOrderAnalytics(inbox, AnalyzedForEnum.FOR_CUSTOMER),
             createOrderAnalytics(inbox, AnalyzedForEnum.FOR_COMPANY)
         ))
         .toList();
-    List<OrderAnalyticsEntity> savedOrderAnalytics = orderAnalyticsService.saveAll(orderAnalyticsToSaveAll);
+    List<OrderAnalyticsEntity> analyticsEntities = orderAnalyticsService.saveAll(orderAnalyticsToSaveAll);
 
-    return inboxesNotProcessed.stream()
+    List<UUID> orderInboxIds = inboxesNotProcessed.stream()
         .map(OrderInbox::getId)
         .toList();
+    orderInboxRepository.updateProcessedDateBatch(orderInboxIds, LocalDateTime.now());
+
+    return analyticsEntities;
   }
 
   private OrderAnalyticsEntity createOrderAnalytics(OrderInbox inbox, AnalyzedForEnum analyzedForEnum) {
