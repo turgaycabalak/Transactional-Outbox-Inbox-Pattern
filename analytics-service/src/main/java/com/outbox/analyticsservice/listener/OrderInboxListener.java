@@ -114,9 +114,7 @@ public class OrderInboxListener {
       String parameter = notification.getParameter();
       log.info("Notification PID: {} || name: {} || parameter: {}", pid, name, parameter);
 
-      // todo: burda map edemiyor
       OrderInbox orderInbox = objectMapper.readValue(parameter, OrderInbox.class);
-
 
       List<OrderAnalyticsEntity> analytics = orderInboxService.createAndSaveAnalytics(List.of(orderInbox));
       List<Long> analyticsIds = analytics.stream()
