@@ -24,6 +24,6 @@ public interface OrderOutboxRepository extends JpaRepository<OrderOutbox, UUID> 
   @Transactional
   @Modifying
   @Query("UPDATE OrderOutbox o SET o.processedOn = :date WHERE o.id IN :ids")
-  void updateProcessedDateBatch(@Param("ids") List<UUID> ids, @Param("date") LocalDateTime date);
+  void updateProcessedOnBatch(@Param("ids") List<UUID> ids, @Param("date") LocalDateTime date);
 
 }

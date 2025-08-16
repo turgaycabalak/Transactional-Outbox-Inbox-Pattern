@@ -111,7 +111,7 @@ public class OrderOutboxListener {
             event
         );
 
-        orderOutboxRepository.updateProcessedDateBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
+        orderOutboxRepository.updateProcessedOnBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
         log.info("Recovered and processed outbox: {}", orderOutbox.getId());
       } catch (Exception e) {
         log.error("Error recovering outbox {}", orderOutbox.getId(), e);
@@ -130,7 +130,7 @@ public class OrderOutboxListener {
           event
       );
 
-      orderOutboxRepository.updateProcessedDateBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
+      orderOutboxRepository.updateProcessedOnBatch(List.of(orderOutbox.getId()), LocalDateTime.now());
 
       log.info("Processed outbox: {}", orderOutbox.getId());
 

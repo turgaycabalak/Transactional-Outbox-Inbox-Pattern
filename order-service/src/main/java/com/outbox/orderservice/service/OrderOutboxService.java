@@ -73,7 +73,7 @@ public class OrderOutboxService {
         .toList();
 
     if (!processedIds.isEmpty()) {
-      orderOutboxRepository.updateProcessedDateBatch(processedIds, LocalDateTime.now());
+      orderOutboxRepository.updateProcessedOnBatch(processedIds, LocalDateTime.now());
     }
 
     return processedIds;
